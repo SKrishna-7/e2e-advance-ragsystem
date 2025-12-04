@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  backend:
+    # REPLACE 'yourusername' with your Docker Hub username
+    image: sureshkrishnan07/rag-backend:latest
+    container_name: rag_backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./docs:/app/docs
+      - ./chroma:/app/chroma/chroma_db
+      - ./hf_cache:/root/.cache/huggingface
+      # API Keys are injected from the server's .env file
+      - ./.env:/app/.env
+    environment:
+      - CHROMA_PATH=/app/chroma/chroma_db
+      - HF_HOME=/root/.cache/huggingface
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+    env_file:
+      - .env
+    # GPU Support (Remove if using CPU instance)
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    networks:
+      - rag_network
+
+  frontend:
+    # REPLACE 'yourusername' with your Docker Hub username
+    image: sureshkrishnan07/rag-frontend:latest
+    container_name: rag_frontend
+    ports:
+      - "3000:3000"
+    environment:
+      # This forces the browser to look at the server's IP
+      - VITE_API_URL=${VITE_API_URL}
+    networks:
+      - rag_network
+
+networks:
+  rag_network:
+    driver: bridge

@@ -1,0 +1,247 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { 
+  Send, Plus, MoreHorizontal, Search, Filter, User, Bot, 
+  ThumbsUp, ThumbsDown, Copy, RefreshCw, Mic, Sparkles, 
+  FileText, X, Settings, Folder, Menu, Sliders, Database, 
+  Save, Loader2, BookOpen
+} from 'lucide-react';
+
+const API_URL = "http://127.0.0.1:8000";
+
+export default function App() {
+  // --- STATE ---
+  const [messages, setMessages] = useState([{
+    role: 'assistant',
+    content: 'Hello! I am your AI Assistant. Upload a PDF to get started.',
+    intent: 'GREETING',
+    timestamp: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+  }]);
+  const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  
+  // Modals & Data
+  const [selectedSource, setSelectedSource] = useState(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [stats, setStats] = useState({ total_files: 0, total_pages: 0, files: [] });
+  const [settings, setSettings] = useState({
+    chunk_size: 1024, chunk_overlap: 200, top_k_retrieval: 15, top_k_rerank: 5, temperature: 0.0
+  });
+
+  const messagesEndRef = useRef(null);
+  const fileInputRef = useRef(null);
+
+  // --- EFFECTS ---
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  useEffect(() => {
+    fetchData();
+    const interval = setInterval(() => {
+        fetch(`${API_URL}/stats`).then(r => r.ok && r.json().then(setStats)).catch(()=>{});
+    }, 8000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // --- API CALLS ---
+  const fetchData = async () => {
+    try {
+      const [sRes, cRes] = await Promise.all([fetch(`${API_URL}/stats`), fetch(`${API_URL}/settings`)]);
+      if (sRes.ok) setStats(await sRes.json());
+      if (cRes.ok) setSettings(await cRes.json());
+    } catch (e) { console.error("Init fetch failed", e); }
+  };
+
+  const handleSendMessage = async () => {
+    if (!input.trim()) return;
+    const userMsg = { role: 'user', content: input, timestamp: new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) };
+    setMessages(p => [...p, userMsg]);
+    setInput('');
+    setIsLoading(true);
+
+    try {
+      const res = await fetch(`${API_URL}/chat`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: userMsg.content, thread_id: "user_session_1" })
+      });
+      if (!res.ok) throw new Error("API Error");
+      const data = await res.json();
+      setMessages(p => [...p, {
+        role: 'assistant', content: data.answer, sources: data.sources, intent: data.intent,
+        timestamp: new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})
+      }]);
+    } catch (e) {
+      setMessages(p => [...p, { role: 'assistant', content: "Server error. Is the backend running?", isError: true }]);
+    } finally { setIsLoading(false); }
+  };
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setIsUploading(true);
+    const fd = new FormData();
+    fd.append('file', file);
+    try {
+      const res = await fetch(`${API_URL}/upload`, { method: 'POST', body: fd });
+      if (res.ok) {
+        setMessages(p => [...p, { role: 'system', content: `✅ Uploaded ${file.name}. Processing...` }]);
+        setTimeout(fetchData, 2000);
+      }
+    } catch (e) { alert("Upload failed"); } 
+    finally { setIsUploading(false); if (fileInputRef.current) fileInputRef.current.value=""; }
+  };
+
+  const saveSettings = async () => {
+    try {
+      await fetch(`${API_URL}/settings`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(settings) });
+      setShowSettings(false);
+      alert("Settings saved!");
+    } catch (e) { alert("Save failed"); }
+  };
+
+  // --- UI RENDER ---
+  return (
+    <div className="flex w-lvw h-dvh bg-[#F9FAFB] font-sans text-gray-800 overflow-hidden selection:bg-[#00A67E]/20">
+      
+      {/* Mobile Overlay */}
+      {isSidebarOpen && <div className="fixed inset-0 bg-black/40 z-20 md:hidden backdrop-blur-sm" onClick={() => setIsSidebarOpen(false)} />}
+
+      {/* --- SIDEBAR --- */}
+      <div className={`fixed inset-y-0 left-0 z-30 w-80 bg-white border-r border-gray-200 flex flex-col shadow-xl transition-transform duration-300 md:relative md:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        
+        {/* Header */}
+        <div className="p-5 flex items-center justify-between">
+          <p className="text-3xl font-bold text-gray-800 tracking-tight mt-20">RAG Agent</p>
+          <div className="flex gap-2 mt-4">
+            <button onClick={() => fileInputRef.current?.click()} className="p-2 bg-[#00A67E] hover:bg-[#008c6b] text-white rounded-lg shadow-md transition-colors mt-5" title="Upload PDF">
+              {isUploading ? <Loader2 className="animate-spin" size={20} /> : <Plus size={20} />}
+            </button>
+            <button className="md:hidden p-2 text-gray-400 hover:bg-gray-100 rounded-lg " onClick={() => setIsSidebarOpen(false)}><X size={20} /></button>
+          </div>
+          <input type="file" ref={fileInputRef} className="hidden" accept=".pdf" onChange={handleFileUpload} 
+          />
+        </div>
+
+        {/* Stats Panel */}
+        <div className="px-5 pb-5 flex-1 overflow-y-auto">
+          <div className="mb-6">
+            <h3 className="flex items-center gap-2 text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-4"><Database size={12} /> Knowledge Base</h3>
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
+                <div className="text-2xl font-bold text-gray-800">{stats.total_files}</div>
+                <div className="text-[10px] text-gray-500 font-medium uppercase">Docs</div>
+              </div>
+              <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
+                <div className="text-2xl font-bold text-gray-800">{stats.total_pages}</div>
+                <div className="text-[10px] text-gray-500 font-medium uppercase">Pages</div>
+              </div>
+            </div>
+            {stats.files.map((f, i) => (
+              <div key={i} className="flex justify-between items-center p-2 hover:bg-gray-50 rounded-lg group transition-colors">
+                 <div className="flex items-center gap-2 overflow-hidden">
+                   <FileText size={14} className="text-gray-400 group-hover:text-[#00A67E]" />
+                   <span className="text-xs text-gray-600 truncate max-w-[140px]">{f.name}</span>
+                 </div>
+                 <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 rounded">{f.pages}p</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Bottom Nav */}
+        <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-between items-center text-gray-500">
+           <div className="flex items-center gap-2"><div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"/> <span className="text-xs font-medium">System Online</span></div>
+           <button onClick={() => setShowSettings(true)} className="p-2 hover:bg-gray-200 rounded-lg text-gray-600"><Settings size={18}/></button>
+        </div>
+      </div>
+
+      {/* --- MAIN CHAT --- */}
+      <div className="flex-1 flex flex-col relative bg-white w-full">
+        {/* Header */}
+        <div className="h-16 border-b border-gray-100 flex items-center justify-between px-4 bg-white z-10">
+          <div className="flex items-center gap-3">
+             <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-2 -ml-2 text-gray-500 rounded-lg"><Menu size={24}/></button>
+             <h2 className="font-bold text-lg text-gray-800">Session</h2>
+          </div>
+          <MoreHorizontal className="text-gray-400" />
+        </div>
+
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 pb-32 mb-10">
+          {messages.map((msg, i) => (
+            <div key={i} className="flex gap-4 max-w-4xl mx-auto group">
+              <div className={`w-8 h-8 rounded-lg flex-shrink-0 flex items-center justify-center ${msg.role === 'assistant' ? 'bg-[#00A67E] text-white' : 'bg-gray-200 text-gray-600'}`}>
+                 {msg.role === 'assistant' ? <Bot size={18} /> : <User size={18} />}
+              </div>
+              <div className="flex-1 space-y-2 min-w-0">
+                <div className="flex items-center gap-2"><span className="font-bold text-sm text-gray-900">{msg.role === 'assistant' ? 'AI Agent' : 'You'}</span> <span className="text-xs text-gray-400">{msg.timestamp}</span></div>
+                {msg.role === 'system' ? <span className="text-xs bg-gray-100 text-gray-600 px-3 py-1 rounded-full">{msg.content}</span> : (
+                  <div className={`p-4 rounded-xl ${msg.role === 'assistant' ? 'bg-[#E3F3EE] text-gray-800' : 'text-gray-800'}`}>
+                    <div className="whitespace-pre-wrap text-[15px] leading-relaxed">{msg.content}</div>
+                    {msg.sources?.some(s => s.images?.length > 0) && (
+                      <div className="grid gap-2 mt-2">{msg.sources.flatMap(s => s.images).map((img, k) => (
+                         <img key={k} src={img} className="rounded-lg border border-[#00A67E]/20 bg-white mt-4" />
+                      ))}</div>
+                    )}
+                    {msg.sources?.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-[#00A67E]/20">
+                        <p>Reference : </p>
+                        {msg.sources.map((src, k) => (
+                          <button key={k} onClick={() => setSelectedSource(src)} className="flex items-center gap-1 py-1 bg-white hover:bg-[#d0e8e0] text-white text-xs  border border-[#00A67E]/20 transition-colors shadow-sm">
+                            <BookOpen size={8}/> Page {src.page}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+          {isLoading && <div className="flex gap-4 max-w-4xl mx-auto"><div className="w-8 h-8 bg-[#00A67E] rounded-lg animate-pulse"/> <div className="flex items-center gap-1"><span className="w-2 h-2 bg-[#00A67E] rounded-full animate-bounce"/><span className="w-2 h-2 bg-[#00A67E] rounded-full animate-bounce delay-100"/><span className="w-2 h-2 bg-[#00A67E] rounded-full animate-bounce delay-200"/></div></div>}
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* Input */}
+        <div className=" absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-white via-white to-transparent">
+          <div className="max-w-3xl mx-auto relative">
+             <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()} placeholder="Ask a question..." className="w-full bg-white border border-gray-200 rounded-2xl pl-4 pr-12 py-3 shadow-lg focus:border-[#00A67E] focus:ring-2 focus:ring-[#00A67E]/20 outline-none" disabled={isLoading}/>
+             <button onClick={handleSendMessage} disabled={!input.trim() || isLoading} className="absolute right-2 top-2 p-1.5 bg-[#00A67E] text-white rounded-lg hover:bg-[#008c6b] disabled:bg-gray-200"><Send size={18}/></button>
+          </div>
+        </div>
+      </div>
+
+      {/* --- SETTINGS MODAL --- */}
+      {showSettings && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex justify-end">
+          <div className="w-full max-w-sm bg-white h-full shadow-2xl p-6 flex flex-col animate-in slide-in-from-right">
+             <div className="flex justify-between items-center mb-6"><h2 className="font-bold text-gray-800 flex gap-2"><Sliders size={20}/> Settings</h2> <button onClick={() => setShowSettings(false)}><X className="text-gray-400"/></button></div>
+             <div className="space-y-6 flex-1">
+                <div><label className="text-xs font-bold text-gray-500">CHUNK SIZE</label><input type="range" min="256" max="2048" step="128" value={settings.chunk_size} onChange={e => setSettings({...settings, chunk_size: parseInt(e.target.value)})} className="w-full mt-2 accent-[#00A67E]"/> <div className="text-right text-xs font-mono text-[#00A67E]">{settings.chunk_size}</div></div>
+                <div><label className="text-xs font-bold text-gray-500">TOP-K RETRIEVAL</label><input type="range" min="1" max="50" value={settings.top_k_retrieval} onChange={e => setSettings({...settings, top_k_retrieval: parseInt(e.target.value)})} className="w-full mt-2 accent-[#00A67E]"/> <div className="text-right text-xs font-mono text-[#00A67E]">{settings.top_k_retrieval}</div></div>
+             </div>
+             <button onClick={saveSettings} className="w-full bg-gray-900 text-white py-3 rounded-xl font-medium hover:bg-black flex justify-center gap-2"><Save size={18}/> Save Config</button>
+          </div>
+        </div>
+      )}
+
+      {/* --- CITATION MODAL --- */}
+      {selectedSource && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-3xl max-h-[85vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-gray-100">
+            <div className="p-4 border-b border-gray-100 flex justify-between bg-gray-50 items-center">
+               <div className="flex gap-3 items-center"><div className="p-2 bg-white border border-gray-200 rounded-lg"><FileText className="text-[#00A67E]" size={20}/></div><div><h3 className="font-semibold text-sm text-gray-800">{selectedSource.filename}</h3><span className="text-xs text-gray-500">Page {selectedSource.page}</span></div></div>
+               <button onClick={() => setSelectedSource(null)}><X className="text-gray-400 hover:text-gray-600"/></button>
+            </div>
+            <div className="p-8 overflow-y-auto text-gray-700 leading-relaxed font-serif">
+               {selectedSource.images?.map((img, i) => <img key={i} src={img} className="w-full mb-6 rounded-lg border border-gray-100 shadow-sm"/>)}
+               <div className="whitespace-pre-wrap">{selectedSource.content_snippet}</div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

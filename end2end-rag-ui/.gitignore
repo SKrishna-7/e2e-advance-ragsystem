@@ -1,0 +1,23 @@
+# Dependencies
+node_modules
+.pnp
+.pnp.js
+
+# Production Build (Crucial - never commit the build artifact)
+dist/
+dist-ssr/
+
+# Local Environment
+.env
+.env.local
+.env.*
+
+# Logs
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editor directories
+.vscode/
+.idea/
+.DS_Store

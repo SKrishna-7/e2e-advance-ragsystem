@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  # 1. Backend Service (FastAPI + RAG Engine)
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: rag_backend
+    ports:
+      - "8000:8000"
+    
+    volumes:
+      # Map to /app/... because WORKDIR is /app in Dockerfile
+      - ./docs:/app/docs                # Persist PDF uploads
+      - ./chroma:/app/chroma_db            # Persist Vector DB (Chroma)
+      # PERSIST MODELS: Prevents re-downloading gigabytes of models on restart
+      - ./hf_cache:/root/.cache/huggingface 
+      - ./.env:/app/.env                # Live reload env vars
+    
+    environment:
+      # Explicitly point to the mapped internal paths
+      - CHROMA_PATH=/app/chroma/chroma_db
+      - HF_HOME=/root/.cache/huggingface
+      
+      # Connect to Ollama running on your HOST machine
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      
+      # Pass keys from .env
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - LANGCHAIN_API_KEY=${LANGCHAIN_API_KEY}
+      - LANGCHAIN_TRACING_V2=true
+      - LANGCHAIN_PROJECT=production-RAG
+      
+      # Default Provider (can be overridden in .env)
+      - LLM_PROVIDER=${LLM_PROVIDER:-groq}
+    
+    env_file:
+      - .env
+
+    # 🚀 ENABLE GPU SUPPORT
+    # Requires 'nvidia-container-toolkit' on the host
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+    # Allow container to access localhost ports of the host machine
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+    restart: unless-stopped
+    networks:
+      - rag_network
+
+  # 2. Frontend Service
+  frontend:
+    build:
+      context: ./end2end-rag-ui
+      dockerfile: Dockerfile.frontend
+    container_name: rag_frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - rag_network
+
+networks:
+  rag_network:
+    driver: bridge
+
+volumes:
+  ollama_storage:

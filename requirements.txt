@@ -1,0 +1,39 @@
+# --- Core Framework & RAG Logic ---
+langchain>=0.2.0
+langchain-community           # Community integrations
+langchain-core                # Base interfaces
+langchain-ollama              # For Local Llama 3 / Vision
+langchain-groq                # For Fast Cloud Inference (Free Tier)
+langchain-huggingface         # For Local Embeddings (bge-m3)
+langchain-qdrant              # Vector Database Client
+langchain-experimental
+langchain_chroma
+langsmith
+
+--extra-index-url https://download.pytorch.org/whl/cu121
+torch
+torchvision
+torchaudio
+
+
+
+# --- Machine Learning & Embeddings (Local) ---
+sentence-transformers  # Required for local Rerankers
+         # Deep learning backend (CPU/GPU)
+
+docling[easyocr]
+rank_bm25
+
+# --- Application Interface ---
+fastapi>=0.100.0              # Backend API
+uvicorn[standard]             # ASGI Server for FastAPI
+streamlit>=1.30.0             # Frontend UI
+python-multipart              # For file uploads in FastAPI
+
+# --- Utilities & Config ---
+python-dotenv                 # Loading .env files
+pydantic      # Data Validation
+pydantic-settings             # Settings Management
+httpx                         # Async HTTP client
+
+grandalf
