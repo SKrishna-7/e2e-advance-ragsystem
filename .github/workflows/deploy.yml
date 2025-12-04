@@ -30,7 +30,7 @@ jobs:
       - name: Build and Push Frontend
         uses: docker/build-push-action@v4
         with:
-          context: ./end2end-rag
+          context: ./end2end-rag-ui
           file: ./end2end-rag/Dockerfile.frontend
           push: true
           # REPLACE 'yourusername'
