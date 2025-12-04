@@ -31,7 +31,7 @@ jobs:
         uses: docker/build-push-action@v4
         with:
           context: ./end2end-rag-ui
-          file: ./end2end-rag/Dockerfile.frontend
+          file: ./end2end-rag-ui/Dockerfile.frontend
           push: true
           # REPLACE 'yourusername'
           tags: ${{ secrets.DOCKER_USERNAME }}/rag-frontend:latest
