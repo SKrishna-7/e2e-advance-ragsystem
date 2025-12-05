@@ -30,9 +30,9 @@ MODELS_TO_TEST = [
     #     "model_id": "openai/gpt-oss-20b"
     # },
     {
-        "name": "Groq (Llama-3.3-70b)", 
+        "name": "Groq (llama-3.1-8b-instant)", 
         "provider": "groq", 
-        "model_id": "llama-3.3-70b-versatile"
+        "model_id": "llama-3.1-8b-instant"
     }
 ]
 
@@ -89,7 +89,8 @@ def run_comparative_benchmark():
     # Assuming Judge uses Groq (Llama 70b), it uses API, not local VRAM.
     print("⚖️  Initializing Judge (Llama-3.3-70b via Groq)...")
     try:
-        evaluator = RAGEvaluator(model_name="llama-3.3-70b-versatile")
+        evaluator = RAGEvaluator(model_name="llama-3.1-8b-instant")
+        # evaluator = RAGEvaluator(model_name="gemma3:1b")
     except Exception as e:
         print(f"⚠️ Failed to init judge: {e}")
         return

@@ -68,35 +68,85 @@ export default function App() {
 
   const handleSendMessage = async () => {
     if (!input.trim()) return;
+    
+    // 1. Add User Message
     const userMsg = { role: 'user', content: input, timestamp: new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) };
     setMessages(p => [...p, userMsg]);
+    
+    // 2. Add Placeholder for Assistant Message
+    const assistantMsgId = Date.now();
+    setMessages(p => [...p, {
+      id: assistantMsgId,
+      role: 'assistant', 
+      content: '', // Start empty for streaming
+      sources: [],
+      timestamp: new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})
+    }]);
+    
+    const currentInput = input;
     setInput('');
     setIsLoading(true);
 
     try {
-      const res = await fetch(`${API_URL}/chat`, {
-        method: 'POST', 
+      // 3. Call Streaming Endpoint
+      const response = await fetch(`${API_URL}/chat/stream`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          question: userMsg.content, 
+          question: currentInput, 
           thread_id: threadId,
           user_id: threadId 
         })
       });
-      
-      if (!res.ok) throw new Error("API Error");
-      const data = await res.json();
-      
-      setMessages(p => [...p, {
-        role: 'assistant', 
-        content: data.answer, 
-        sources: data.sources, 
-        intent: data.intent,
-        timestamp: new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})
-      }]);
+
+      if (!response.ok) throw new Error("Stream Error");
+
+      // 4. Read the Stream
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let accumulatedText = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        // Split by SSE double newline
+        const lines = chunk.split('\n\n');
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const jsonStr = line.replace("data: ", "").trim();
+            if (jsonStr === "[DONE]") break;
+            
+            try {
+              const event = JSON.parse(jsonStr);
+              
+              if (event.type === 'token') {
+                accumulatedText += event.content;
+                setMessages(prev => prev.map(msg => 
+                  msg.id === assistantMsgId ? { ...msg, content: accumulatedText } : msg
+                ));
+              } else if (event.type === 'sources') {
+                setMessages(prev => prev.map(msg => 
+                  msg.id === assistantMsgId ? { ...msg, sources: event.data } : msg
+                ));
+              } else if (event.type === 'error') {
+                 console.error("Stream Error Event:", event.content);
+              }
+            } catch (e) {
+              // Partial JSON chunks can happen, ignore them
+            }
+          }
+        }
+      }
+
     } catch (e) {
-      setMessages(p => [...p, { role: 'assistant', content: "I'm having trouble connecting to the brain. Is the backend running?", isError: true }]);
-    } finally { setIsLoading(false); }
+      console.error(e);
+      setMessages(p => [...p, { role: 'assistant', content: "⚠️ Connection error. Please check backend.", isError: true }]);
+    } finally { 
+      setIsLoading(false); 
+    }
   };
 
   const handleFileUpload = async (e) => {
@@ -307,7 +357,18 @@ export default function App() {
               {msg.role === 'user' && <div className="w-10 h-10 rounded-2xl bg-gray-200 flex-shrink-0 flex items-center justify-center text-gray-500 overflow-hidden"><User size={20} /></div>}
             </div>
           ))}
-          {isLoading && <div className="flex gap-4 max-w-4xl mx-auto"><div className="w-10 h-10 rounded-2xl bg-white border border-gray-100 shadow-sm flex-shrink-0 flex items-center justify-center text-[#00A67E] animate-pulse"><Bot size={20} /></div><div className="bg-white px-6 py-4 rounded-3xl rounded-tl-none border border-gray-100 shadow-sm flex items-center gap-2"><span className="w-1.5 h-1.5 bg-[#00A67E] rounded-full animate-bounce"/><span className="w-1.5 h-1.5 bg-[#00A67E] rounded-full animate-bounce delay-100"/><span className="w-1.5 h-1.5 bg-[#00A67E] rounded-full animate-bounce delay-200"/></div></div>}
+          {isLoading && !messages[messages.length - 1]?.content && (
+             <div className="flex gap-4 max-w-4xl mx-auto">
+               <div className="w-10 h-10 rounded-2xl bg-white border border-gray-100 shadow-sm flex-shrink-0 flex items-center justify-center text-[#00A67E] animate-pulse">
+                 <Bot size={20} />
+               </div>
+               <div className="bg-white px-6 py-4 rounded-3xl rounded-tl-none border border-gray-100 shadow-sm flex items-center gap-2">
+                 <span className="w-1.5 h-1.5 bg-[#00A67E] rounded-full animate-bounce"/>
+                 <span className="w-1.5 h-1.5 bg-[#00A67E] rounded-full animate-bounce delay-100"/>
+                 <span className="w-1.5 h-1.5 bg-[#00A67E] rounded-full animate-bounce delay-200"/>
+               </div>
+             </div>
+          )}
           <div ref={messagesEndRef} />
         </div>
 

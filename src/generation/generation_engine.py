@@ -208,6 +208,27 @@ class GenerationEngine:
             logger.error(f"Generation failed: {e}")
             return "Sorry, I encountered an error while generating the response."
 
+    def stream_generate_answer(self, query: str, retrieved_docs: List[Document], chat_history: List[str] = []):
+        """Streams the RAG response token by token."""
+        if not retrieved_docs:
+            yield "I could not find any relevant documents to answer your question."
+            return
+
+        context_str = self._format_context(retrieved_docs)
+        history_str = "\n".join(chat_history) if chat_history else "No previous history."
+        
+        try:
+            # Using .stream() instead of .invoke()
+            for chunk in self.rag_chain.stream({
+                "context": context_str,
+                "question": query,
+                "chat_history": history_str
+            }):
+                yield chunk
+        except Exception as e:
+            logger.error(f"Streaming failed: {e}")
+            yield "Error generating response."
+
     def _format_context(self, docs: List[Document]) -> str:
         """Helper to format docs into a string with metadata."""
         formatted_text = ""
@@ -219,3 +240,5 @@ class GenerationEngine:
             formatted_text += f"{doc.page_content}\n\n"
             
         return formatted_text
+    
+        
