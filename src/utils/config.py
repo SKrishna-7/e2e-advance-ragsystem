@@ -23,7 +23,8 @@ class RetrievalConfig:
         
         # Models
         self.EMBEDDING_MODEL = "BAAI/bge-m3"
-        self.RERANKER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+        # self.RERANKER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+        self.RERANKER_MODEL = "cross-encoder/ms-marco-TinyBERT-L-2-v2"
         self.DEVICE = os.getenv("DEVICE", "cuda")
         
         # Tuning
@@ -47,3 +48,13 @@ class ModelConfig:
     # Note: host.docker.internal allows Docker to see Ollama on your host machine
     
     TEMP = 0
+
+
+
+class CacheConfig:
+    def __init__(self):
+        # Default to localhost for local testing, 'rag_redis' for Docker
+        self.REDIS_URL = "redis://localhost:6379/0"
+        self.CACHE_TTL = 3600 * 24  # Cache expires in 24 hours
+
+

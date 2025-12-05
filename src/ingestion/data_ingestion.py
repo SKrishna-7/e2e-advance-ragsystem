@@ -27,6 +27,7 @@ from docling.datamodel.base_models import InputFormat
 
 from src.utils.config import DataIngestionConfig
 from logger.logger_config import get_logger
+import torch
 
 logger = get_logger("DataIngestion_LOG")
 
@@ -56,9 +57,10 @@ class DataIngestionPipeline:
             return self.docling_converter
             
         logger.info(f"Initializing Docling with device: {self.config.DEVICE}")
+        actual_device = AcceleratorDevice.CUDA if torch.cuda.is_available() else AcceleratorDevice.CPU
         accelerator_options = AcceleratorOptions(
             num_threads=4,
-            device=AcceleratorDevice.CUDA if self.config.DEVICE == "cuda" else AcceleratorDevice.CPU
+            device=actual_device
         )
         pipeline_options = PdfPipelineOptions(accelerator_options=accelerator_options)
         pipeline_options.do_ocr = True 

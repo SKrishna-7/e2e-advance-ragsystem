@@ -34,7 +34,8 @@ services:
       
       # Default Provider (can be overridden in .env)
       - LLM_PROVIDER=${LLM_PROVIDER:-groq}
-    
+      - REDIS_URL=redis://rag_redis:6379/0
+
     env_file:
       - .env
 
@@ -55,6 +56,20 @@ services:
     restart: unless-stopped
     networks:
       - rag_network
+    depends_on:
+      - redis
+  
+  redis:
+    image: redis:7-alpine
+    container_name: rag_redis
+    ports:
+      - "6379:6379"
+    restart: always
+    networks:
+      - rag_network
+    # Optional: Persist cache to disk
+    volumes:
+      - redis_data:/data
 
   # 2. Frontend Service
   frontend:
@@ -75,3 +90,4 @@ networks:
 
 volumes:
   ollama_storage:
+  redis_data:

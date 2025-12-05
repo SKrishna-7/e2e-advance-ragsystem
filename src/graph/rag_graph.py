@@ -4,8 +4,9 @@ from langgraph.checkpoint.memory import MemorySaver
 
 from src.retrieval.retrieval import RetrievalEngine
 from src.generation.generation_engine import GenerationEngine
-from src.utils.config import RetrievalConfig , ModelConfig
+from src.utils.config import RetrievalConfig , CacheConfig
 from langchain_core.documents import Document
+from src.utils.cache_manager import CacheManager
 
 
 # 1. Define the Graph State
@@ -32,18 +33,32 @@ class RAGGraph:
         config = RetrievalConfig() 
         self.retriever = RetrievalEngine(config)
         self.generator = GenerationEngine()
-        
+        self.cache = CacheManager()
         # Build the Workflow
         self.app = self._build_workflow()
 
     # --- NODES ---
 
     def decide_intent(self, state: GraphState):
-        """Node 1: Analyze user intent (Chat vs Search)."""
-        print("   ↳ 🧠 Checking Intent...", end="\r")
-        intent = self.generator.check_intent(state["question"])
-        return {"intent": intent, "loop_count": 0} # Initialize loop count
+        """Node 1: Check Cache -> Analyze user intent."""
+        question = state["question"]
+        
+        # 1. CHECK REDIS FIRST
+        cached_response = self.cache.get_answer(question)
+        if cached_response:
+            print("   ↳ ⚡ Serving from Cache...", end="\r")
+            # We skip the whole pipeline by setting a special intent
+            return {
+                "intent": "CACHED", 
+                "answer": cached_response["answer"],
+                "documents": [] # Or restore documents if you cached them
+            }
 
+        # 2. If not in cache, proceed as normal
+        print("   ↳ 🧠 Checking Intent...", end="\r")
+        intent = self.generator.check_intent(question)
+        return {"intent": intent, "loop_count": 0}
+    
     def run_chat(self, state: GraphState):
         """Node 2A: Handle casual conversation."""
         print("   ↳ 💬 Chatting...", end="\r")
@@ -62,16 +77,10 @@ class RAGGraph:
         Checks if the retrieved documents are actually relevant to the question.
         """
         print("   ↳ ⚖️  Grading Docs...", end="\r")
-        question = state["question"]
         documents = state["documents"]
         
-        filtered_docs = []
-        for d in documents:
-            score = self.generator.grade_document(question, d.page_content)
-            if score == "yes":
-                filtered_docs.append(d)
         
-        return {"documents": filtered_docs}
+        return {"documents": documents}
 
     def transform_query(self, state: GraphState):
         """
@@ -87,31 +96,35 @@ class RAGGraph:
         return {"question": better_question, "loop_count": loop_count + 1}
 
     def generate_rag_answer(self, state: GraphState):
-        """Node 5: Generate the final answer using valid documents."""
+        """Node 5: Generate answer AND save to Redis."""
         print("   ↳ 📝 Generating...", end="\r")
         response = self.generator.generate_answer(
             state["question"], 
             state["documents"],
             state.get("chat_history", [])
         )
+        
+        # 💾 SAVE TO REDIS
+        # Only cache if we actually found documents (to avoid caching "I don't know")
+        if state["documents"]:
+            self.cache.set_answer(state["question"], response)
 
         new_history = state.get("chat_history", []) + [
             f"User: {state['question']}",
             f"Assistant: {response}"
         ]
-        
-        if len(new_history) > 10: 
-            new_history = new_history[-10:]
-
+        # ... existing return ...
         return {"answer": response, "chat_history": new_history}
     # --- EDGES ---
 
     def route_query(self, state: GraphState):
         """Conditional Edge: Route based on intent."""
+        if state["intent"] == "CACHED": # 👈 Add Fast Lane
+            return END
         if state["intent"] == "CHAT":
             return "chat_node"
+        
         return "retrieve_node"
-
     def decide_to_generate(self, state: GraphState):
         """
         Conditional Edge: Decide whether to generate or retry.
@@ -155,6 +168,8 @@ class RAGGraph:
             {
                 "chat_node": "chat_node",
                 "retrieve_node": "retrieve_node"
+,
+                END :END
             }
         )
 

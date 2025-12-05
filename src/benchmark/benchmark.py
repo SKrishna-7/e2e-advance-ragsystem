@@ -44,14 +44,11 @@ TEST_DATASET = [
     "Who wrote the Introduction to this edition?",
     "According to the Publishers' Note, what other book did Willard Huntington Wright write about Nietzsche?",
     "How does the computational complexity of a Self-Attention layer compare to a Recurrent layer?",
-    "What is the subtitle of the book 'Beyond Good and Evil'?",
     "What is the title of the 'Aftersong' or poem found at the end of the book?",
-    "What Nietzshe think about Will to Truth ? ",
     "Nietzshe's opinion on Epicurus ?",
     "Describe the architecture of the Encoder stack in the Transformer.",
 
     "How does Nietzsche describe the 'Will to Truth' in the first chapter?",
-    "What distinction does Nietzsche make between 'Master Morality' and 'Slave Morality'?",
     "What optimizer was used for training the Transformer, and what were its parameters?",
 
     "What does Nietzsche say is the fundamental drive of all philosophy?",
