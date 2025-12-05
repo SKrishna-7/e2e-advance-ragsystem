@@ -139,10 +139,9 @@ Combines both lists for balanced relevance.
 AI Engineer | LLM Systems | Retrieval Engineering
 
 - GitHub: https://github.com/SKrishna-7
-- LinkedIn: *(add your LinkedIn URL here if you'd like)*
-- Email: *(add your contact email if you'd like)*
+- LinkedIn: https://www.linkedin.com/in/suresh-krishnan-s/
+- Portfolio : https://sureshkrishnan.vercel.app/
 
 ---
 
-*If you found this project useful or have feedback, feel free to open an issue or reach out — always happy to collaborate!*
 
